@@ -114,7 +114,7 @@ model.to(device)
 
 criterion = LogNLLLoss()
 optimizer = torch.optim.Adam(list(model.parameters()), lr=args.learning_rate,
-                             weight_decay=1e-5)
+                             weight_decay=1e-5) #Optimization is the process of adjusting model parameters to reduce model error in each training step. 
 
 
 pytorch_total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
