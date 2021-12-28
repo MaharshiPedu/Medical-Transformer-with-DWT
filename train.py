@@ -143,7 +143,8 @@ for epoch in range(args.epochs):
         5. Pass HH to the model. <output_HH = model(HH)>
 
         6. Take idwt of all these outputs. <idwt_out_fig = pywt.idwt2(coeff2, 'db3')>
-        7. Get the loss function of this.
+        7. Set the masks.
+        8. Get the loss function.
         '''
         output_bands_train = dwt.DWT(X_batch)
 
@@ -178,40 +179,6 @@ for epoch in range(args.epochs):
         output_HH = model(HH_train)
         #output = model(X_batch)  # Output from the transformer
 
-        tmp2 = y_batch.detach().cpu().numpy() # detach().cpu().numpy() this combination of method calls detaches the gpu, assigns cpu and converts the tensor to a numpy array 
-        tmpLL = output_LL.detach().cpu().numpy()
-        tmpLH = output_LH.detach().cpu().numpy()
-        tmpHL = output_HL.detach().cpu().numpy()
-        tmpHH = output_HH.detach().cpu().numpy()
-
-        # Applying masks' color, black or white
-        tmpLL[tmpLL>=0.5] = 1
-        tmpLL[tmpLL<0.5] = 0
-
-        tmpLH[tmpLH>=0.5] = 1
-        tmpLH[tmpLH<0.5] = 0
-
-        tmpHL[tmpHL>=0.5] = 1
-        tmpHL[tmpHL<0.5] = 0
-
-        tmpHH[tmpHH>=0.5] = 1
-        tmpHH[tmpHH<0.5] = 0
-
-        tmp2[tmp2>0] = 1
-        tmp2[tmp2<=0] = 0
-
-        tmp2 = tmp2.astype(int)
-        tmpLL = tmpLL.astype(int)
-        tmpLH = tmpLH.astype(int)
-        tmpHL = tmpHL.astype(int)
-        tmpHH = tmpHH.astype(int)
-
-        yHaT_LL = tmpLL
-        yHaT_LH = tmpLH
-        yHaT_HL = tmpHL
-        yHaT_HH = tmpHH
-        yval = tmp2
-
         #Taking IDWT
         output = dwt.IDWT(output_LL, output_LH, output_HL, output_HH)
 
@@ -220,6 +187,24 @@ for epoch in range(args.epochs):
 
         #wrapping the output from in a variable
         output = Variable(output.to(device ='cuda'))
+
+        tmp2 = y_batch.detach().cpu().numpy() # detach().cpu().numpy() this combination of method calls detaches the gpu, assigns cpu and converts the tensor to a numpy array 
+        tmp = output.detach().cpu().numpy()
+
+        # Applying masks' color, black or white
+        
+        tmp[tmp>=0.5] = 1
+        tmp[tmp<0.5] = 0
+
+        tmp2[tmp2>0] = 1
+        tmp2[tmp2<=0] = 0
+
+        tmp2 = tmp2.astype(int)
+        tmp = tmp.astype(int)
+
+        yHaT = tmp
+        yval = tmp2
+
         
 
         loss = criterion(output, y_batch)
@@ -278,42 +263,32 @@ for epoch in range(args.epochs):
             output_HH_val = model(HH_val)
             #y_out = model(X_batch)
 
+            #Taking IDWT
+            y_out = dwt.IDWT(output_LL_val, output_LH_val, output_HL_val, output_HH_val)
+
+            #Converting the output from numpy array to tensor
+            y_out = torch.tensor(y_out)
+
+            #wrapping the output from in a variable
+            y_out = Variable(y_out.to(device ='cuda'))
             # start = timeit.default_timer()
            
             # stop = timeit.default_timer()
             # print('Time: ', stop - start)
             tmp2 = y_batch.detach().cpu().numpy()
-            tmpLL = output_LL_val.detach().cpu().numpy()
-            tmpLH = output_LH_val.detach().cpu().numpy()
-            tmpHL = output_HL_val.detach().cpu().numpy()
-            tmpHH = output_HH_val.detach().cpu().numpy()
-
+            tmp = y_out.detach().cpu().numpy()
+            
             # Applying masks' color, black or white
-            tmpLL[tmpLL>=0.5] = 1
-            tmpLL[tmpLL<0.5] = 0
-
-            tmpLH[tmpLH>=0.5] = 1
-            tmpLH[tmpLH<0.5] = 0
-
-            tmpHL[tmpHL>=0.5] = 1
-            tmpHL[tmpHL<0.5] = 0
-
-            tmpHH[tmpHH>=0.5] = 1
-            tmpHH[tmpHH<0.5] = 0
+            tmp[tmp>=0.5] = 1
+            tmp[tmp<0.5] = 0
 
             tmp2[tmp2>0] = 1
             tmp2[tmp2<=0] = 0
 
             tmp2 = tmp2.astype(int)
-            tmpLL = tmpLL.astype(int)
-            tmpLH = tmpLH.astype(int)
-            tmpHL = tmpHL.astype(int)
-            tmpHH = tmpHH.astype(int)
+            tmp = tmp.astype(int)            
 
-            yHaT_LL = tmpLL
-            yHaT_LH = tmpLH
-            yHaT_HL = tmpHL
-            yHaT_HH = tmpHH
+            yHaT = tmp
             yval = tmp2
 
 
@@ -321,13 +296,9 @@ for epoch in range(args.epochs):
 
             epsilon = 1e-20
             
-            del X_batch, y_batch,tmpLL, tmpLH, tmpHL, tmpHH, tmp2, output_LL_val, output_LH_val, output_HL_val, output_HH_val
- 
-            
-            yHaT_LL[yHaT_LL==1] =255
-            yHaT_LH[yHaT_LH==1] =255
-            yHaT_HL[yHaT_HL==1] =255
-            yHaT_HH[yHaT_HH==1] =255
+            del X_batch, y_batch, tmp, tmp2, y_out
+
+            yHaT[yHaT==1] =255
             yval[yval==1] =255
             fulldir = direc+"/{}/".format(epoch)
             # print(fulldir+image_filename)
