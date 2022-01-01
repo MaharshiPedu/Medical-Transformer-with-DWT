@@ -113,8 +113,10 @@ if torch.cuda.device_count() > 1:
 model.to(device)
 
 criterion = LogNLLLoss()
+#Optimization is the process of adjusting model parameters to reduce model error in each training step.
+# parameters are all the attributes associated with the model object. 
 optimizer = torch.optim.Adam(list(model.parameters()), lr=args.learning_rate,
-                             weight_decay=1e-5)
+                             weight_decay=1e-5)  
 
 
 pytorch_total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -141,7 +143,8 @@ for epoch in range(args.epochs):
         5. Pass HH to the model. <output_HH = model(HH)>
 
         6. Take idwt of all these outputs. <idwt_out_fig = pywt.idwt2(coeff2, 'db3')>
-        7. Get the loss function of this.
+        7. Set the masks.
+        8. Get the loss function.
         '''
         output_bands_train = dwt.DWT(X_batch)
 
@@ -154,7 +157,7 @@ for epoch in range(args.epochs):
         HL_train = output_bands_train[2]
         HH_train = output_bands_train[3]
 
-        #Converting the individual numpy arrays of bands to tensor before wrapping it into a Variable
+        #Converting the individual numpy arrays of bands to tensor before wrapping them as Variable
         LL_train = torch.tensor(LL_train)
         LH_train = torch.tensor(LH_train)
         HL_train = torch.tensor(HL_train)
@@ -176,51 +179,40 @@ for epoch in range(args.epochs):
         output_HH = model(HH_train)
         #output = model(X_batch)  # Output from the transformer
 
+        #Taking IDWT
+        output = dwt.IDWT(output_LL, output_LH, output_HL, output_HH)
+
+        #Converting the output from numpy array to tensor
+        output = torch.tensor(output)
+
+        #wrapping the output from in a variable
+        output = Variable(output.to(device ='cuda'))
+
         tmp2 = y_batch.detach().cpu().numpy() # detach().cpu().numpy() this combination of method calls detaches the gpu, assigns cpu and converts the tensor to a numpy array 
-        tmpLL = output_LL.detach().cpu().numpy()
-        tmpLH = output_LH.detach().cpu().numpy()
-        tmpHL = output_HL.detach().cpu().numpy()
-        tmpHH = output_HH.detach().cpu().numpy()
+        tmp = output.detach().cpu().numpy()
 
         # Applying masks' color, black or white
-        tmpLL[tmpLL>=0.5] = 1
-        tmpLL[tmpLL<0.5] = 0
-
-        tmpLH[tmpLH>=0.5] = 1
-        tmpLH[tmpLH<0.5] = 0
-
-        tmpHL[tmpHL>=0.5] = 1
-        tmpHL[tmpHL<0.5] = 0
-
-        tmpHH[tmpHH>=0.5] = 1
-        tmpHH[tmpHH<0.5] = 0
+        
+        tmp[tmp>=0.5] = 1
+        tmp[tmp<0.5] = 0
 
         tmp2[tmp2>0] = 1
         tmp2[tmp2<=0] = 0
 
         tmp2 = tmp2.astype(int)
-        tmpLL = tmpLL.astype(int)
-        tmpLH = tmpLH.astype(int)
-        tmpHL = tmpHL.astype(int)
-        tmpHH = tmpHH.astype(int)
+        tmp = tmp.astype(int)
 
-        yHaT_LL = tmpLL
-        yHaT_LH = tmpLH
-        yHaT_HL = tmpHL
-        yHaT_HH = tmpHH
+        yHaT = tmp
         yval = tmp2
-
-        #Taking IDWT
-        output = dwt.IDWT(output_LL, output_LH, output_HL, output_HH)
 
         
 
         loss = criterion(output, y_batch)
         
         # ===================backward====================
-        optimizer.zero_grad()
+        optimizer.zero_grad() # zero_grad() zeroes all the gradients accumulated so far.
         loss.backward()
-        optimizer.step()
+        optimizer.step() #After computing the gradients for all tensors in the model, calling optimizer.step() makes the optimizer iterate over all parameters (tensors) it is supposed to update and use their internally stored grad to update their values.
         epoch_running_loss += loss.item()
         
     # ===================log========================
@@ -231,39 +223,81 @@ for epoch in range(args.epochs):
     if epoch == 10:
         for param in model.parameters():
             param.requires_grad =True
-    if (epoch % args.save_freq) ==0:
+    if (epoch % args.save_freq) ==0:  # After every 10 epochs we use the validation dataset for improvement in learning. This ensures that the model is actually 'learning' and not "remembering"
 
         for batch_idx, (X_batch, y_batch, *rest) in enumerate(valloader):
             # print(batch_idx)
-            if isinstance(rest[0][0], str):
+            if isinstance(rest[0][0], str): # checking if rest[0][0] is a string.
                         image_filename = rest[0][0]
             else:
-                        image_filename = '%s.png' % str(batch_idx + 1).zfill(3)
+                        image_filename = '%s.png' % str(batch_idx + 1).zfill(3) #zfill(3) adds preceding zeroes to the name of the image until the length of the name becomes 3.
 
-            X_batch = Variable(X_batch.to(device='cuda'))
+            output_bands_val = dwt.DWT(X_batch)
+
+            # converting the received list of numpy arrays to a numpy array.
+            output_bands_val = np.array(output_bands_val)
+
+            # Storing the individual numpy arrays of the bands.
+            LL_val = output_bands_val[0]
+            LH_val = output_bands_val[1]
+            HL_val = output_bands_val[2]
+            HH_val = output_bands_val[3]
+
+            #Converting the individual numpy arrays of bands to tensor before wrapping them as Variable
+            LL_val = torch.tensor(LL_val)
+            LH_val = torch.tensor(LH_val)
+            HL_val = torch.tensor(HL_val)
+            HH_val = torch.tensor(HH_val)
+
+            # wrapping the individual numpy arrays of bands into Variable
+            LL_val = Variable(LL_val.to(device ='cuda'))
+            LH_val = Variable(LH_val.to(device ='cuda'))
+            HL_val = Variable(HL_val.to(device ='cuda'))
+            HH_val = Variable(HH_val.to(device ='cuda'))
+
             y_batch = Variable(y_batch.to(device='cuda'))
+
+            output_LL_val = model(LL_val)
+            output_LH_val = model(LH_val)
+            output_HL_val = model(HL_val)
+            output_HH_val = model(HH_val)
+            #y_out = model(X_batch)
+
+            #Taking IDWT
+            y_out = dwt.IDWT(output_LL_val, output_LH_val, output_HL_val, output_HH_val)
+
+            #Converting the output from numpy array to tensor
+            y_out = torch.tensor(y_out)
+
+            #wrapping the output from in a variable
+            y_out = Variable(y_out.to(device ='cuda'))
             # start = timeit.default_timer()
-            y_out = model(X_batch)
+           
             # stop = timeit.default_timer()
-            # print('Time: ', stop - start) 
+            # print('Time: ', stop - start)
             tmp2 = y_batch.detach().cpu().numpy()
             tmp = y_out.detach().cpu().numpy()
+            
+            # Applying masks' color, black or white
             tmp[tmp>=0.5] = 1
             tmp[tmp<0.5] = 0
+
             tmp2[tmp2>0] = 1
             tmp2[tmp2<=0] = 0
-            tmp2 = tmp2.astype(int)
-            tmp = tmp.astype(int)
 
-            # print(np.unique(tmp2))
+            tmp2 = tmp2.astype(int)
+            tmp = tmp.astype(int)            
+
             yHaT = tmp
             yval = tmp2
 
+
+            # print(np.unique(tmp2))
+
             epsilon = 1e-20
             
-            del X_batch, y_batch,tmp,tmp2, y_out
+            del X_batch, y_batch, tmp, tmp2, y_out
 
-            
             yHaT[yHaT==1] =255
             yval[yval==1] =255
             fulldir = direc+"/{}/".format(epoch)
