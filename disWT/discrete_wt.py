@@ -7,15 +7,15 @@ import os
 from torch.utils.data import DataLoader
 import numpy as np
 import torch
-def DWT(x_batch):
-    x_batch_np = x_batch.detach().cpu().numpy()
-    LL_list, LH_list, HL_list, HH_list = [], [], [], []
-    for _ in range(len(x_batch_np)): # len(x_batch_np) finds out the number of images in the dataset
+def DWT(X_batch):
     
-        imgs = [mpimage.imread(file) for file in x_batch] #Reading all the images in a particular subdirectory, say, 1 in T1fusion
-        tensor_imgs = torch.tensor(imgs)
-        for img in tensor_imgs:
-            
+    LL_list, LH_list, HL_list, HH_list = [], [], [], []
+    # len(x_batch_np) finds out the number of images in the dataset
+    
+        #Reading all the images in a particular subdirectory, say, 1 in T1fusion
+    
+    for imgs in X_batch:
+        for img in imgs:
             coeffs2 = pywt.dwt2(img, 'db3')
             LL, (LH, HL, HH) = coeffs2
             LL_list.append(LL)
